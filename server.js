@@ -30,7 +30,7 @@ app.use('/user', userRouter);
 
 
 // Configuring the database
-const dbConfig = require('./api/config/database.config.js');
+const dbConfig = require('./config/database.config.js');
 const mongoose = require('mongoose');
 
 mongoose.Promise = global.Promise;
@@ -52,15 +52,23 @@ const rabbitmqConfig = require('./comms/config/rabbitmq.config.js')
 
 offlinePubQueue = []
 global.amqpConn = comms.init();
+global.amqpConsumers = [];
 amqpConn.then(function(conn){
     return conn.createChannel();
 }).then(function(ch) {
-    global.amqpChannel = ch
     ch.assertExchange(rabbitmqConfig.authExchange).then(function(ok) {
         console.log("Auth exchange ready")
     });
-}).catch(console.warn);
+    global.amqpChannel = ch
     
+    comms.consumeReply(amqpChannel).then(function(consumerTag){
+        global.amqpConsumers.push(consumerTag)
+        console.log("reply consumer set up", consumerTag)
+    })
+    
+    
+}).catch(console.warn);
+
 
 
 

@@ -1,6 +1,7 @@
 const amqp = require('amqplib/callback_api');
 const amqplib = require('amqplib')
 const rabbitmqConfig = require('./config/rabbitmq.config.js')
+const userEvent = require('../tasks/events/user.emitter.js')
 
 //TODO: Error handling
 exports.init = function() {
@@ -33,6 +34,45 @@ exports.init = function() {
     return Promise.resolve(amqpConn);
 }
 
+exports.publish = function(channel, exchange, routingKey, content) {
+  try {
+    pubChannel = channel
+    content = new Buffer(JSON.stringify(content));
+    options = {
+      correlationId : Date.now().toString(),
+      replyTo: 'amq.rabbitmq.reply-to', 
+      persistent: true 
+    }
+    pubChannel.publish(exchange, routingKey, content, options,
+                      function(err, ok) {
+                        if (err) {
+                          console.error("[AMQP] publish", err);
+                          offlinePubQueue.push([exchange, routingKey, content]);
+                          //pubChannel.connection.close();
+                        }
+                      });
+  } catch (e) {
+    console.error("[AMQP] publish", e.message);
+    offlinePubQueue.push([exchange, routingKey, content]);
+  }
+}
+
+exports.consumeReply = function(channel){
+  return new Promise(function(resolve, reject){
+    channel.consume('amq.rabbitmq.reply-to', (msg) => {  
+      var res = JSON.parse(msg.content.toString('utf-8'))
+      console.log("Consume reply received", res)
+      console.log("Emitting event")
+      userEvent.userEventEmitter.emit(userEvent.authComplete, res);
+  
+    }, {noAck : true})
+    .then(consumerTag => {
+      resolve(consumerTag)
+    }).catch(err => {
+      console.log("[AMQP] reply-to", err.message)
+    });
+  })
+}
 /*
 var pubChannel = null;
 var offlinePubQueue = [];
@@ -66,41 +106,3 @@ startPublisher = function (amqpConn) {
 
 */
 
-exports.publish = function(channel, exchange, routingKey, content) {
-    try {
-      pubChannel = channel
-
-       module.exports.consumeReply(channel);
-      console.log("reply set up")
-
-      content = new Buffer(JSON.stringify(content));
-      options = {
-        correlationId : Date.now().toString(),
-        replyTo: 'amq.rabbitmq.reply-to', 
-        persistent: true 
-      }
-      pubChannel.publish(exchange, routingKey, content, options,
-                        function(err, ok) {
-                          if (err) {
-                            console.error("[AMQP] publish", err);
-                            offlinePubQueue.push([exchange, routingKey, content]);
-                            //pubChannel.connection.close();
-                          }
-                        });
-    } catch (e) {
-      console.error("[AMQP] publish", e.message);
-      offlinePubQueue.push([exchange, routingKey, content]);
-    }
-  }
-
-  exports.consumeReply = function(channel){
-    try {
-      channel.consume('amq.rabbitmq.reply-to', (msg) =>{ 
-        console.log(msg)
-        //eventEmitter.emit(msg.properties.correlationId, msg.content), {noAck: true});
-        console.log("Consume reply set up")
-      });
-    } catch (e) {
-      console.error("[AMQP] reply-to", e.message);
-    }
-  }

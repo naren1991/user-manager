@@ -1,5 +1,8 @@
-const User = require('../models/user.model.js');
-const comms = require('../../comms/publishers/auth.publishers.js')
+//TODO: Have a clean separation between the REST API and messaging interaction - Done (REVIEW)
+//TODO: Error handling - Done (REVIEW)
+//TODO: What happens for failed/ timed out requests - Need to handle
+
+const userTask = require('../../tasks/user.task.js')
 
 exports.create = (req, res) => {
     // Validate request
@@ -9,78 +12,22 @@ exports.create = (req, res) => {
         });
     }
 
-    const user = new User({
-        userName: req.body.userName,
-        name: req.body.name,
-        authType: req.body.authType || 'google',
-        email: req.body.email || ""
-    })
-
-    var authContent = {
-        userName : req.body.userName,
-        authType: req.body.authType || "google"
-    }
-    //comms.authenticateForCreation(authContent)
-    
-    comms.authenticate(authContent)
-    console.log("auth message sent")
-    res.send(authContent)
-    /*
-    user.save()
+    userTask.authenticate(req)
     .then(data => {
-        res.send(data);
-    }).catch(err => {
-        res.status(500).send({
-            message: err.message || 'An unknown error occured while adding the user'
-        })
+        return userTask.createEntry(req)
+    })
+    .then(data => {
+        res.send(data)
+    })
+    .catch( err => {
+        console.log(err);
     });
-    */
-};
 
-exports.getAll = (req, res) => {
-    User.find()
-    .then(users => {
-        res.send(users);
-    }).catch(err => {
-        res.status(500).send({
-            message: err.message || 'An unknown error occured while fetching all the users'
-        })
-    });
 };
 
 exports.search = (req, res) => {
-
-    var fields = [];
-    if(req.body._id){
-        fields.push("_id");
-    }
-    if(req.body.name){
-        fields.push("name");
-    }
-    if(req.body.authType){
-        fields.push("authType");
-    }
-    if(req.body.email){
-        fields.push("email");
-    }
-
-    var conditions = {};
-    if(fields != []){
-        fields.forEach(function(f){
-            conditions[f] = req.body[f];     
-        }) 
-        
-        User.find(conditions)
-        .then(results => {
-            res.send(results)
-        }).catch(err => {
-            res.status(500).send({
-                message: err.message || 'An unknown error occured while searching users'
-            })
-        });
-    }
-
-    
+    var results = userTask.search(req)
+    res.send(results)
 };
 
 exports.update = (req, res) => {
