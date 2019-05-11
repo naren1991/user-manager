@@ -1,6 +1,6 @@
 const User = require('./models/user.model.js');
 const comms = require('../comms/publishers/auth.publishers.js')
-const userEvent= require('./events/user.emitter.js')
+const userEvent= require('./events/user.event.js')
 
 
 exports.authenticate = (req) => {
@@ -11,16 +11,20 @@ exports.authenticate = (req) => {
             userName : req.body.userName,
             authType: req.body.authType || "google"
         }
-        comms.authenticate(authContent)
+
+        var config = {
+            correlationId : Date.now().toString()
+        }
+        comms.authenticate(authContent, config)
         console.log("auth message sent")
 
-        userEvent.userEventEmitter.on(userEvent.authComplete, function(data){
+        userEvent.userEventEmitter.on(userEvent.authComplete, function(res){
             //TODO: Add auth success check here
-            if(data){
-                resolve(data)
-            }else{
-                reject(new Error('auth-failure'))
+            if(res.properties.correlationId == config.correlationId){
+                resolve(res.content)
             }
+
+            //TODO: HOw to handle failure
             
         })
     })

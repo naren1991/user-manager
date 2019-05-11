@@ -1,7 +1,7 @@
 const amqp = require('amqplib/callback_api');
 const amqplib = require('amqplib')
 const rabbitmqConfig = require('./config/rabbitmq.config.js')
-const userEvent = require('../tasks/events/user.emitter.js')
+const userEvent = require('../tasks/events/user.event.js')
 
 //TODO: Error handling
 exports.init = function() {
@@ -34,12 +34,12 @@ exports.init = function() {
     return Promise.resolve(amqpConn);
 }
 
-exports.publish = function(channel, exchange, routingKey, content) {
+exports.publish = function(channel, exchange, routingKey, content, config) {
   try {
     pubChannel = channel
     content = new Buffer(JSON.stringify(content));
     options = {
-      correlationId : Date.now().toString(),
+      correlationId : config.correlationId,
       replyTo: 'amq.rabbitmq.reply-to', 
       persistent: true 
     }
@@ -60,9 +60,13 @@ exports.publish = function(channel, exchange, routingKey, content) {
 exports.consumeReply = function(channel){
   return new Promise(function(resolve, reject){
     channel.consume('amq.rabbitmq.reply-to', (msg) => {  
-      var res = JSON.parse(msg.content.toString('utf-8'))
-      console.log("Consume reply received", res)
-      console.log("Emitting event")
+      var res = {
+        content: JSON.parse(msg.content.toString('utf-8')),
+        properties: msg.properties
+      }
+
+      console.log("Consume reply received", res, msg.properties.correlationId)
+      console.log("Emitting event for correlationId ", res.properties.correlationId)
       userEvent.userEventEmitter.emit(userEvent.authComplete, res);
   
     }, {noAck : true})
